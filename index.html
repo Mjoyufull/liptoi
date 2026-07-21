@@ -13,6 +13,7 @@
     <meta name="theme-color" content="#03070c" />
     <link data-trunk rel="rust" data-bin="liptoi" data-wasm-opt="z" />
     <link data-trunk rel="copy-file" href="favicon.svg" />
+    <link data-trunk rel="copy-file" href="input-controls.js" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <title>Liptoi // Tilt Through the Fever</title>
     <style>
@@ -31,15 +32,17 @@
       html,
       body {
         width: 100%;
-        min-height: 100%;
+        height: 100%;
+        min-height: 0;
         margin: 0;
         overflow: hidden;
         overscroll-behavior: none;
       }
 
       body {
-        min-height: 100vh;
-        min-height: 100svh;
+        height: 100vh;
+        height: 100svh;
+        height: 100dvh;
         display: grid;
         grid-template-rows: minmax(0, 1fr) auto;
         padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
@@ -54,6 +57,9 @@
 
       #terminal-shell {
         position: relative;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
         min-height: 0;
         display: grid;
         place-items: center;
@@ -62,7 +68,8 @@
       #terminal {
         width: min(100%, 1480px);
         height: min(100%, 860px);
-        min-height: 260px;
+        min-width: 0;
+        min-height: 0;
         overflow: hidden;
         touch-action: none;
         user-select: none;
@@ -76,19 +83,10 @@
 
       #terminal canvas {
         display: block;
-        max-width: 100%;
-        max-height: 100%;
-        margin: auto;
-        outline: none;
-      }
-
-      pre {
+        width: 100% !important;
+        height: 100% !important;
         margin: 0;
-        padding: 0;
-        font: inherit;
-        font-size: clamp(10px, 1.05vw, 16px);
-        line-height: 1.15;
-        white-space: pre;
+        outline: none;
       }
 
       #boot-screen {
@@ -109,9 +107,11 @@
       }
 
       #control-dock {
-        min-height: 48px;
+        min-width: 0;
+        min-height: 50px;
         display: flex;
-        align-items: end;
+        flex-wrap: wrap;
+        align-items: center;
         justify-content: center;
         gap: 12px;
         padding-top: 8px;
@@ -159,6 +159,14 @@
         letter-spacing: 0.04em;
       }
 
+      #input-status {
+        min-width: 15rem;
+        color: #7dd3fc;
+        font-size: 0.66rem;
+        letter-spacing: 0.06em;
+        text-align: center;
+      }
+
       .sr-only {
         position: absolute;
         width: 1px;
@@ -173,20 +181,55 @@
 
       @media (max-width: 700px) {
         body {
+          padding-top: max(4px, env(safe-area-inset-top));
           padding-right: max(4px, env(safe-area-inset-right));
+          padding-bottom: max(4px, env(safe-area-inset-bottom));
           padding-left: max(4px, env(safe-area-inset-left));
         }
 
         #terminal {
           width: 100%;
-          min-height: 220px;
         }
 
-        pre {
-          font-size: clamp(7px, 2.18vw, 11px);
-          line-height: 1.1;
+        #control-dock {
+          min-height: 42px;
+          gap: 6px;
+          padding-top: 4px;
         }
 
+        button {
+          padding: 0.62rem 0.72rem;
+          font-size: 0.66rem;
+        }
+
+        #input-status {
+          order: 3;
+          flex-basis: 100%;
+          min-width: 0;
+          font-size: 0.58rem;
+        }
+
+        .privacy-note {
+          display: none;
+        }
+      }
+
+      @media (max-height: 500px) {
+        body {
+          padding-top: max(3px, env(safe-area-inset-top));
+          padding-bottom: max(3px, env(safe-area-inset-bottom));
+        }
+
+        #control-dock {
+          min-height: 34px;
+          padding-top: 3px;
+        }
+
+        button {
+          padding: 0.5rem 0.65rem;
+        }
+
+        #input-status,
         .privacy-note {
           display: none;
         }
@@ -208,66 +251,16 @@
       </div>
     </main>
     <div id="control-dock">
-      <button id="motion-start" type="button" disabled>INITIALIZING WASM…</button>
+      <button id="motion-start" type="button" disabled hidden>ENABLE TILT + START</button>
+      <button id="basic-start" type="button" disabled>INITIALIZING WASM…</button>
       <button id="recenter" type="button" hidden>RECENTER TILT</button>
+      <output id="input-status" aria-live="polite">DETECTING INPUT…</output>
       <span class="privacy-note">orientation stays in this tab // no network telemetry</span>
     </div>
     <p id="game-instructions" class="sr-only">
       Tilt your phone, drag on the playfield, or use WASD and arrow keys to move the sphere through
       approaching openings. Press R to recenter motion controls.
     </p>
-    <script type="module">
-      const startButton = document.querySelector("#motion-start");
-      const recenterButton = document.querySelector("#recenter");
-      const bootScreen = document.querySelector("#boot-screen");
-
-      const sendMotionStatus = (status) => {
-        window.dispatchEvent(new CustomEvent("liptoi-motion-status", { detail: status }));
-      };
-
-      const focusTerminal = () => {
-        document.querySelector("#terminal [tabindex]")?.focus({ preventScroll: true });
-      };
-
-      startButton.addEventListener("click", async () => {
-        startButton.disabled = true;
-        startButton.textContent = "REQUESTING SENSOR…";
-        let status = "unsupported";
-
-        if ("DeviceOrientationEvent" in window) {
-          const requestPermission = window.DeviceOrientationEvent.requestPermission;
-          if (typeof requestPermission === "function") {
-            try {
-              status = await requestPermission.call(window.DeviceOrientationEvent);
-            } catch (_error) {
-              status = "denied";
-            }
-          } else {
-            status = "granted";
-          }
-        }
-
-        sendMotionStatus(status);
-        startButton.hidden = true;
-        recenterButton.hidden = status !== "granted";
-        focusTerminal();
-      });
-
-      recenterButton.addEventListener("click", () => {
-        window.dispatchEvent(new Event("liptoi-recenter"));
-        recenterButton.textContent = "TILT RECENTERED";
-        window.setTimeout(() => {
-          recenterButton.textContent = "RECENTER TILT";
-        }, 900);
-        focusTerminal();
-      });
-
-      window.addEventListener("TrunkApplicationStarted", () => {
-        bootScreen.hidden = true;
-        startButton.disabled = false;
-        startButton.textContent =
-          "DeviceOrientationEvent" in window ? "ARM MOTION + START" : "START WITH TOUCH / KEYS";
-      });
-    </script>
+    <script type="module" src="./input-controls.js"></script>
   </body>
 </html>

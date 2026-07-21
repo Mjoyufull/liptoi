@@ -1,6 +1,6 @@
 use liptoi::{
     game::{Game, GamePhase},
-    input::{ControlFrame, ControlSource, MotionStatus},
+    input::{ControlFrame, ControlSource, MotionStatus, PointerKind},
     math::Vec2,
     ui::{self, UiTelemetry},
 };
@@ -13,6 +13,9 @@ fn render(game: &Game, width: u16, height: u16) -> String {
         motion_status: MotionStatus::Active,
         source: ControlSource::Tilt,
         tilt: Vec2::new(0.24, -0.36),
+        pointer_kind: PointerKind::Touch,
+        touch_capable: true,
+        motion_capable: true,
     };
     terminal
         .draw(|frame| ui::render(frame, game, telemetry))
@@ -47,7 +50,8 @@ fn phone_layout_keeps_the_start_prompt_inside_the_viewport() {
     let output = render(&Game::new(42), 46, 30);
 
     assert!(output.contains("LIPTOI"));
-    assert!(output.contains("ARM MOTION"));
+    assert!(output.contains("ENABLE TILT · OR TAP TO START"));
+    assert!(output.contains("LOCAL SENSOR ONLY"));
     assert!(!output.contains("TELEMETRY"));
 }
 

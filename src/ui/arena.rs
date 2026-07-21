@@ -1,18 +1,20 @@
 //! Perspective tunnel and particle rendering inside the bounded playfield.
 
+mod overlay;
+
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::{Color, Style},
     text::Line,
-    widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget},
+    widgets::{Block, BorderType, Borders, Widget},
 };
 
 use crate::{
     game::{Game, GamePhase},
     hazard::Gate,
     math::Vec2,
-    ui::{BLUE, CORAL, CYAN, ICE, INK, MUTED, ORANGE, VOID},
+    ui::{BLUE, CYAN, ICE, MUTED, ORANGE, UiTelemetry},
 };
 
 const NAVY: Color = Color::Rgb(5, 17, 27);
@@ -22,11 +24,12 @@ const SAND_DARK: Color = Color::Rgb(176, 103, 55);
 
 pub(super) struct Arena<'a> {
     game: &'a Game,
+    telemetry: UiTelemetry,
 }
 
 impl<'a> Arena<'a> {
-    pub(super) const fn new(game: &'a Game) -> Self {
-        Self { game }
+    pub(super) const fn new(game: &'a Game, telemetry: UiTelemetry) -> Self {
+        Self { game, telemetry }
     }
 }
 
@@ -68,7 +71,7 @@ impl Widget for Arena<'_> {
             draw_player(buffer, space, self.game);
         }
         draw_sand(buffer, space, self.game);
-        draw_overlay(buffer, inner, self.game);
+        overlay::draw(buffer, inner, self.game, self.telemetry);
     }
 }
 
@@ -281,111 +284,6 @@ fn draw_sand(buffer: &mut Buffer, space: ArenaSpace, game: &Game) {
         cell.set_symbol(symbol)
             .set_fg(mix(SAND_DARK, SAND_LIGHT, grain.tone));
     }
-}
-
-fn draw_overlay(buffer: &mut Buffer, area: Rect, game: &Game) {
-    match game.phase() {
-        GamePhase::Ready => draw_ready(buffer, area),
-        GamePhase::Running => {}
-        GamePhase::GameOver => draw_game_over(buffer, area, game),
-    }
-}
-
-fn draw_ready(buffer: &mut Buffer, area: Rect) {
-    let height = area.height.min(11);
-    let width = area.width.saturating_sub(2).min(58);
-    let overlay = centered(area, width, height);
-    Clear.render(overlay, buffer);
-    let compact = overlay.height < 10 || overlay.width < 42;
-    let lines = if compact {
-        vec![
-            Line::styled("L I P T O I", Style::new().fg(CYAN).bold()),
-            Line::styled("tilt · dodge · dissolve", Style::new().fg(INK)),
-            Line::styled("", Style::default()),
-            Line::styled("ARM MOTION BELOW", Style::new().fg(ORANGE).bold()),
-            Line::styled("or press SPACE", Style::new().fg(MUTED)),
-        ]
-    } else {
-        vec![
-            Line::styled("╻  ╻┏━┓╺┳╸┏━┓╻", Style::new().fg(CYAN).bold()),
-            Line::styled("┃  ┃┣━┛ ┃ ┃ ┃┃", Style::new().fg(ICE).bold()),
-            Line::styled("┗━╸╹╹   ╹ ┗━┛╹", Style::new().fg(CYAN).bold()),
-            Line::styled("", Style::default()),
-            Line::styled("A SLOW-BURN TILT DODGER", Style::new().fg(INK)),
-            Line::styled(
-                "find the opening before the wall arrives",
-                Style::new().fg(MUTED),
-            ),
-            Line::styled("", Style::default()),
-            Line::styled(
-                "[ ARM MOTION BELOW // OR PRESS SPACE ]",
-                Style::new().fg(ORANGE).bold(),
-            ),
-        ]
-    };
-    Paragraph::new(lines)
-        .alignment(Alignment::Center)
-        .block(
-            Block::new()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Double)
-                .border_style(Style::new().fg(BLUE))
-                .style(Style::new().bg(VOID)),
-        )
-        .render(overlay, buffer);
-}
-
-fn draw_game_over(buffer: &mut Buffer, area: Rect, game: &Game) {
-    let width = area.width.saturating_sub(2).min(56);
-    let height = if game.phase_time() < 0.48 { 5 } else { 10 }.min(area.height);
-    let overlay = centered(area, width, height);
-    Clear.render(overlay, buffer);
-
-    let lines = if game.phase_time() < 0.48 {
-        vec![
-            Line::styled("I M P A C T", Style::new().fg(CORAL).bold()),
-            Line::styled("sphere → particulate", Style::new().fg(ORANGE)),
-        ]
-    } else {
-        vec![
-            Line::styled("S I G N A L   L O S T", Style::new().fg(CORAL).bold()),
-            Line::styled("the sphere became sediment", Style::new().fg(ORANGE)),
-            Line::styled("", Style::default()),
-            Line::styled(
-                format!("SCORE {:05}  //  GATES {:03}", game.score(), game.cleared()),
-                Style::new().fg(INK),
-            ),
-            Line::styled(
-                format!("SURVIVED {:05.1}s", game.elapsed()),
-                Style::new().fg(ICE),
-            ),
-            Line::styled("", Style::default()),
-            Line::styled(
-                "TILT TO POUR WHAT REMAINS",
-                Style::new().fg(SAND_LIGHT).bold(),
-            ),
-            Line::styled("tap or press SPACE to reform", Style::new().fg(MUTED)),
-        ]
-    };
-    Paragraph::new(lines)
-        .alignment(Alignment::Center)
-        .block(
-            Block::new()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Double)
-                .border_style(Style::new().fg(ORANGE))
-                .style(Style::new().bg(VOID)),
-        )
-        .render(overlay, buffer);
-}
-
-fn centered(area: Rect, width: u16, height: u16) -> Rect {
-    Rect::new(
-        area.x + area.width.saturating_sub(width) / 2,
-        area.y + area.height.saturating_sub(height) / 2,
-        width.min(area.width),
-        height.min(area.height),
-    )
 }
 
 fn mix(from: Color, to: Color, amount: f32) -> Color {
