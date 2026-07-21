@@ -5,6 +5,9 @@
 [![CI](https://github.com/Mjoyufull/liptoi/actions/workflows/ci.yml/badge.svg)](https://github.com/Mjoyufull/liptoi/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Mjoyufull/liptoi/actions/workflows/pages.yml/badge.svg)](https://github.com/Mjoyufull/liptoi/actions/workflows/pages.yml)
 
+**Source:** [Trylle](https://trylle.com/mjoyufull/liptoi) ·
+[GitHub Pages mirror](https://github.com/Mjoyufull/liptoi)
+
 Liptoi is a slow-burn tunnel dodger rendered entirely as a terminal interface in the browser.
 Obstacles grow out of the vanishing point, leaving one safe opening. Tilt a phone to roll and flip
 the sphere into that opening before the wall reaches the player plane. A collision turns the sphere
@@ -21,15 +24,18 @@ terminal artwork are original to Liptoi.
 | Input | Action |
 | --- | --- |
 | Phone tilt | Steer the sphere; pour the sand after impact |
-| Touch or mouse drag | Direct fallback steering |
+| Touch drag | Direct phone/tablet fallback steering |
+| Mouse or trackpad drag | Direct desktop steering |
 | WASD or arrow keys | Keyboard steering |
 | Space / Enter / tap | Start or reform after impact |
 | R / **Recenter Tilt** | Use the current phone pose as neutral |
 
-Press **Arm Motion + Start** from the phone itself. iOS requires that direct gesture before a site
-can read orientation. Motion sensors require HTTPS in production; `localhost` is accepted for local
-development. If permission is denied or the device has no sensor, touch and keyboard controls remain
-fully playable.
+Press **Enable Tilt + Start** from the phone itself. iOS requires that direct gesture before a site
+can read orientation. The game waits for a real sensor sample before calling tilt active or starting
+the run. Motion sensors require HTTPS in production; `localhost` is accepted for local development.
+If permission is denied or no sample arrives, touch and keyboard controls remain fully playable.
+Desktop devices advertise mouse and keyboard controls instead of a misleading touch/gyro prompt.
+Inputs auto-switch as soon as a different control is used.
 
 Orientation samples never leave the tab. Liptoi has no analytics or network telemetry. Only the best
 score is retained, in browser-local storage.
@@ -73,9 +79,9 @@ Open the LAN HTTPS URL on a phone when testing real sensors. Plain HTTP is suffi
 
 ## Deploy
 
-Pushes to `main` publish the Trunk release bundle through GitHub Actions. A newly created repository
-must first select **Settings → Pages → Build and deployment → Source: GitHub Actions**; after that,
-the checked-in Pages workflow handles each deployment.
+Trylle is the source of truth; GitHub is a mirror used for free Pages hosting. Release commits land
+on Trylle first and are then pushed unchanged to GitHub. Pushes to GitHub `main` publish the Trunk
+release bundle through GitHub Actions. The checked-in Pages workflow handles each deployment.
 
 ## Verify
 
@@ -107,18 +113,20 @@ if Firefox reports a browser error.
 ## Project shape
 
 ```text
+input-controls.js      Device detection and permission/sample handshake
 src/
-├── browser.rs   Web APIs, permissions, persistence, and the fixed-step loop
-├── game.rs      Game state machine and player physics
-├── hazard.rs    Fair gate sequence and collision contracts
-├── input.rs     Tilt calibration and unified control shaping
-├── math.rs      Normalized 2D geometry
-├── sand.rs      Post-impact grain simulation
-└── ui/          Responsive Ratatui composition and tunnel renderer
+├── browser.rs         Persistence and the fixed-step browser loop
+├── browser/bindings.rs Web API event boundary
+├── game.rs            Game state machine and player physics
+├── hazard.rs          Fair gate sequence and collision contracts
+├── input.rs           Tilt calibration and unified control shaping
+├── math.rs            Normalized 2D geometry
+├── sand.rs            Post-impact grain simulation
+└── ui/                 Responsive Ratatui composition and tunnel renderer
 ```
 
-The pure simulation modules compile and test natively. Browser types are confined to `browser.rs`,
-which keeps sensor availability from infecting the game model.
+The pure simulation modules compile and test natively. Browser types are confined to the `browser`
+module, which keeps sensor availability from infecting the game model.
 
 ## License
 

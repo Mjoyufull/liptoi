@@ -1,11 +1,11 @@
 [package]
 name = "liptoi"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.90"
 authors = ["Mjoyufull"]
 description = "A slow-burn gyroscope dodging game rendered by Ratatui in the browser"
-repository = "https://github.com/Mjoyufull/liptoi"
+repository = "https://trylle.com/mjoyufull/liptoi"
 readme = "README.md"
 license = "MIT"
 keywords = ["game", "gyroscope", "ratatui", "ratzilla", "webassembly"]
