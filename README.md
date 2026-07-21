@@ -71,6 +71,12 @@ trunk serve --open
 Open the LAN HTTPS URL on a phone when testing real sensors. Plain HTTP is sufficient only on
 `localhost`; browsers intentionally block motion APIs in an insecure remote context.
 
+## Deploy
+
+Pushes to `main` publish the Trunk release bundle through GitHub Actions. A newly created repository
+must first select **Settings → Pages → Build and deployment → Source: GitHub Actions**; after that,
+the checked-in Pages workflow handles each deployment.
+
 ## Verify
 
 ```bash

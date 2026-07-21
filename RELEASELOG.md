@@ -1,6 +1,28 @@
 # Release log
 
-## [0.1.0] Latest
+## [0.1.1] Latest
+
+Fixed
+
+- Updated every Pages action to its current Node.js 24 release line.
+- Documented the one-time GitHub Actions source selection required for a new Pages site.
+
+Notes
+
+- SemVer: this patch repairs deployment configuration without changing gameplay or saved data.
+
+Contributors
+
+- @Mjoyufull
+- Co-authored-by: Codex
+
+Compatibility
+
+- Runtime and browser compatibility are unchanged from 0.1.0.
+
+---
+
+## [0.1.0]
 
 Added
 
