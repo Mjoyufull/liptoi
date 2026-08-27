@@ -24,7 +24,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install Trunk
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.6
         with:
           tool: trunk@0.21.14
 
