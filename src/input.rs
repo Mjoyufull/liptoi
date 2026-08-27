@@ -58,7 +58,34 @@ impl ControlSource {
             Self::Idle => "STANDBY",
             Self::Tilt => "GYRO",
             Self::Keyboard => "KEYS",
-            Self::Pointer => "TOUCH",
+            Self::Pointer => "POINTER",
+        }
+    }
+}
+
+/// Concrete pointer hardware reported by the browser.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PointerKind {
+    /// No pointer event has been received yet.
+    #[default]
+    Unknown,
+    /// A mouse or trackpad pointer.
+    Mouse,
+    /// A touchscreen pointer.
+    Touch,
+    /// A stylus pointer.
+    Pen,
+}
+
+impl PointerKind {
+    /// Short label used by the terminal HUD.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Unknown => "POINTER",
+            Self::Mouse => "MOUSE",
+            Self::Touch => "TOUCH",
+            Self::Pen => "PEN",
         }
     }
 }
@@ -84,6 +111,9 @@ pub struct InputHub {
     keyboard: Vec2,
     keyboard_remaining: f32,
     pointer_target: Option<Vec2>,
+    pointer_kind: PointerKind,
+    touch_capable: bool,
+    motion_capable: bool,
     source: ControlSource,
     start_requested: bool,
 }
@@ -105,8 +135,23 @@ impl InputHub {
         }
     }
 
+    /// Records the input capabilities detected by the browser.
+    pub fn set_capabilities(&mut self, touch_capable: bool, motion_capable: bool) {
+        self.touch_capable = touch_capable;
+        self.motion_capable = motion_capable;
+        if !motion_capable {
+            self.set_motion_status(MotionStatus::Unavailable);
+        }
+    }
+
     /// Records a raw orientation sample and maps it for the current screen rotation.
     pub fn record_orientation(&mut self, beta: f32, gamma: f32, screen_angle: i16) {
+        if !matches!(
+            self.motion_status,
+            MotionStatus::Listening | MotionStatus::Active
+        ) {
+            return;
+        }
         let oriented = orient_sample(beta, gamma, screen_angle);
         let baseline = match self.baseline {
             Some(baseline) => baseline,
@@ -139,8 +184,9 @@ impl InputHub {
     }
 
     /// Starts or updates pointer steering in normalized viewport coordinates.
-    pub fn set_pointer(&mut self, target: Vec2) {
+    pub fn set_pointer(&mut self, target: Vec2, kind: PointerKind) {
         self.pointer_target = Some(target.clamp(-1.0, 1.0));
+        self.pointer_kind = kind;
         self.source = ControlSource::Pointer;
     }
 
@@ -191,6 +237,24 @@ impl InputHub {
         self.source
     }
 
+    /// Returns the concrete pointer device most recently used.
+    #[must_use]
+    pub const fn pointer_kind(&self) -> PointerKind {
+        self.pointer_kind
+    }
+
+    /// Returns whether the browser reports direct touch input.
+    #[must_use]
+    pub const fn touch_capable(&self) -> bool {
+        self.touch_capable
+    }
+
+    /// Returns whether motion input is a plausible capability on this device.
+    #[must_use]
+    pub const fn motion_capable(&self) -> bool {
+        self.motion_capable
+    }
+
     /// Returns the filtered tilt vector for telemetry.
     #[must_use]
     pub const fn tilt(&self) -> Vec2 {
@@ -209,12 +273,13 @@ fn orient_sample(beta: f32, gamma: f32, screen_angle: i16) -> Vec2 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ControlSource, InputHub, MotionStatus};
+    use super::{ControlSource, InputHub, MotionStatus, PointerKind};
     use crate::math::Vec2;
 
     #[test]
     fn first_orientation_sample_sets_a_neutral_pose() {
         let mut input = InputHub::new();
+        input.set_motion_status(MotionStatus::Listening);
         input.record_orientation(52.0, 8.0, 0);
 
         assert_eq!(input.motion_status(), MotionStatus::Active);
@@ -224,6 +289,7 @@ mod tests {
     #[test]
     fn portrait_tilt_is_normalized_from_the_baseline() {
         let mut input = InputHub::new();
+        input.set_motion_status(MotionStatus::Listening);
         input.record_orientation(50.0, 5.0, 0);
         input.record_orientation(74.0, 29.0, 0);
 
@@ -236,6 +302,7 @@ mod tests {
     #[test]
     fn landscape_rotation_keeps_controls_screen_relative() {
         let mut input = InputHub::new();
+        input.set_motion_status(MotionStatus::Listening);
         input.record_orientation(10.0, 20.0, 90);
         input.record_orientation(34.0, -4.0, 90);
 
@@ -251,5 +318,24 @@ mod tests {
 
         assert!(input.take_start_request());
         assert!(!input.take_start_request());
+    }
+
+    #[test]
+    fn orientation_is_ignored_until_motion_is_armed() {
+        let mut input = InputHub::new();
+        input.record_orientation(52.0, 8.0, 0);
+
+        assert_eq!(input.motion_status(), MotionStatus::Waiting);
+        assert_eq!(input.sample(1.0).vector, Vec2::ZERO);
+    }
+
+    #[test]
+    fn pointer_events_preserve_the_actual_pointer_kind() {
+        let mut input = InputHub::new();
+        input.set_pointer(Vec2::new(0.5, -0.5), PointerKind::Mouse);
+
+        assert_eq!(input.source(), ControlSource::Pointer);
+        assert_eq!(input.pointer_kind(), PointerKind::Mouse);
+        assert_eq!(input.pointer_kind().label(), "MOUSE");
     }
 }

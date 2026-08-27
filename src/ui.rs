@@ -12,7 +12,7 @@ use ratatui::{
 
 use crate::{
     game::{Game, GamePhase},
-    input::{ControlSource, InputHub, MotionStatus},
+    input::{ControlSource, InputHub, MotionStatus, PointerKind},
     math::Vec2,
 };
 
@@ -36,6 +36,39 @@ pub struct UiTelemetry {
     pub source: ControlSource,
     /// Filtered tilt vector.
     pub tilt: Vec2,
+    /// Concrete pointer hardware most recently used.
+    pub pointer_kind: PointerKind,
+    /// Whether direct touch input is available.
+    pub touch_capable: bool,
+    /// Whether motion input is plausible on this device.
+    pub motion_capable: bool,
+}
+
+impl UiTelemetry {
+    fn source_label(self) -> &'static str {
+        if self.source == ControlSource::Pointer {
+            self.pointer_kind.label()
+        } else {
+            self.source.label()
+        }
+    }
+
+    fn input_status_label(self) -> &'static str {
+        if !self.motion_capable {
+            return if self.touch_capable {
+                "TOUCH / KEYS"
+            } else {
+                "MOUSE / KEYS"
+            };
+        }
+        match self.motion_status {
+            MotionStatus::Waiting => "TILT OPTIONAL",
+            MotionStatus::Listening => "CALIBRATING",
+            MotionStatus::Active => "TILT ONLINE",
+            MotionStatus::Denied => "TILT DENIED",
+            MotionStatus::Unavailable => "TOUCH / KEYS",
+        }
+    }
 }
 
 impl From<&InputHub> for UiTelemetry {
@@ -44,6 +77,9 @@ impl From<&InputHub> for UiTelemetry {
             motion_status: input.motion_status(),
             source: input.source(),
             tilt: input.tilt(),
+            pointer_kind: input.pointer_kind(),
+            touch_capable: input.touch_capable(),
+            motion_capable: input.motion_capable(),
         }
     }
 }
@@ -57,6 +93,11 @@ pub fn render(frame: &mut Frame<'_>, game: &Game, telemetry: UiTelemetry) {
         return;
     }
 
+    let shell_footer = if area.width < 62 {
+        " LOCAL SENSOR ONLY "
+    } else {
+        " RATATUI × RATZILLA // LOCAL SENSOR SIGNAL ONLY "
+    };
     let shell = Block::new()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
@@ -65,10 +106,7 @@ pub fn render(frame: &mut Frame<'_>, game: &Game, telemetry: UiTelemetry) {
             Span::styled(" LIPTOI ", Style::new().fg(CYAN).bold()),
             Span::styled("// TILT THROUGH THE FEVER ", Style::new().fg(MUTED)),
         ]))
-        .title_bottom(Line::styled(
-            " RATATUI × RATZILLA // LOCAL SENSOR SIGNAL ONLY ",
-            Style::new().fg(MUTED),
-        ));
+        .title_bottom(Line::styled(shell_footer, Style::new().fg(MUTED)));
     let inner = shell.inner(area).inner(Margin::new(1, 0));
     frame.render_widget(shell, area);
 
@@ -101,7 +139,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, game: &Game, telemetry: UiTe
     let status = Line::from(vec![
         Span::styled(format!(" {phase} "), Style::new().fg(phase_color).bold()),
         Span::styled("│ ", Style::new().fg(BLUE)),
-        Span::styled(telemetry.motion_status.label(), Style::new().fg(CYAN)),
+        Span::styled(telemetry.input_status_label(), Style::new().fg(CYAN)),
         Span::styled("  ", Style::default()),
         Span::styled(score, Style::new().fg(INK).bold()),
         Span::styled("  ", Style::default()),
@@ -120,7 +158,7 @@ fn render_header(frame: &mut Frame<'_>, area: Rect, game: &Game, telemetry: UiTe
 
 fn render_body(frame: &mut Frame<'_>, area: Rect, game: &Game, telemetry: UiTelemetry) {
     let arena_area = arena_rect(area);
-    frame.render_widget(Arena::new(game), arena_area);
+    frame.render_widget(Arena::new(game, telemetry), arena_area);
 
     let left_width = arena_area.x.saturating_sub(area.x + 1);
     if left_width >= 18 {
@@ -162,7 +200,7 @@ fn render_telemetry(frame: &mut Frame<'_>, area: Rect, game: &Game, telemetry: U
     let text = vec![
         Line::styled("", Style::default()),
         Line::styled("CONTROL", Style::new().fg(MUTED)),
-        Line::styled(telemetry.source.label(), Style::new().fg(CYAN).bold()),
+        Line::styled(telemetry.source_label(), Style::new().fg(CYAN).bold()),
         Line::styled("", Style::default()),
         Line::styled("TILT VECTOR", Style::new().fg(MUTED)),
         meter_line("X", telemetry.tilt.x),
@@ -234,20 +272,42 @@ fn side_panel(title: &'static str, text: Vec<Line<'static>>) -> Paragraph<'stati
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect, game: &Game, telemetry: UiTelemetry) {
-    let prompt = match game.phase() {
-        GamePhase::Ready => "ARM MOTION BELOW · SPACE/ENTER TO START",
-        GamePhase::Running => "TILT / WASD / ARROWS / DRAG  ·  R RECENTERS",
-        GamePhase::GameOver if game.phase_time() < 0.65 => "IMPACT // SPHERE DECOHERING",
-        GamePhase::GameOver => "TILT TO POUR THE SAND  ·  TAP/SPACE TO REFORM",
+    let compact = area.width < 70;
+    let prompt = match (
+        game.phase(),
+        telemetry.touch_capable,
+        telemetry.motion_capable,
+        compact,
+    ) {
+        (GamePhase::Ready, false, _, true) => "DRAG OR SPACE TO START",
+        (GamePhase::Ready, false, _, false) => "MOUSE / WASD / ARROWS · SPACE STARTS",
+        (GamePhase::Ready, true, true, true) => "ENABLE TILT · OR TAP TO START",
+        (GamePhase::Ready, true, true, false) => "ENABLE TILT BELOW · TOUCH/KEYS WORK NOW",
+        (GamePhase::Ready, true, false, _) => "TAP / DRAG OR SPACE TO START",
+        (GamePhase::Running, false, _, true) => "MOUSE / KEYS · AUTO SWITCH",
+        (GamePhase::Running, false, _, false) => "MOUSE / WASD / ARROWS · AUTO SWITCH",
+        (GamePhase::Running, true, true, true) => "TILT / TOUCH · AUTO SWITCH",
+        (GamePhase::Running, true, true, false) => {
+            "TILT / TOUCH / KEYS · AUTO SWITCH · R RECENTERS"
+        }
+        (GamePhase::Running, true, false, _) => "TOUCH / KEYS · AUTO SWITCH",
+        (GamePhase::GameOver, _, _, _) if game.phase_time() < 0.65 => "IMPACT // SPHERE DECOHERING",
+        (GamePhase::GameOver, false, _, _) => "MOVE TO POUR SAND · CLICK/SPACE REFORMS",
+        (GamePhase::GameOver, true, true, _) => "TILT TO POUR SAND · TAP/SPACE REFORMS",
+        (GamePhase::GameOver, true, false, _) => "DRAG TO POUR SAND · TAP/SPACE REFORMS",
     };
-    let line = Line::from(vec![
-        Span::styled(" CONTROL ", Style::new().fg(MUTED)),
-        Span::styled(prompt, Style::new().fg(INK)),
-        Span::styled(
-            format!("  [{}] ", telemetry.source.label()),
-            Style::new().fg(CYAN),
-        ),
-    ]);
+    let line = if compact {
+        Line::styled(prompt, Style::new().fg(INK))
+    } else {
+        Line::from(vec![
+            Span::styled(" CONTROL ", Style::new().fg(MUTED)),
+            Span::styled(prompt, Style::new().fg(INK)),
+            Span::styled(
+                format!("  [{}] ", telemetry.source_label()),
+                Style::new().fg(CYAN),
+            ),
+        ])
+    };
     frame.render_widget(
         Paragraph::new(line).alignment(Alignment::Center).block(
             Block::new()

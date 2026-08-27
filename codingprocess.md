@@ -49,6 +49,8 @@ UI, input-boundary, resizing, or particle changes also require the Firefox visua
 
 ## Git
 
+- Treat Trylle as the source of truth and GitHub as an exact mirror used for Pages.
+- Record Trylle feature experiments and platform bugs in `trylle.md`.
 - Use Conventional Commits.
 - Work on `feat/*`, `fix/*`, `refactor/*`, or `chore/*` branches from `dev`.
 - Code reaches `dev` through a pull request and `main` through a release branch.

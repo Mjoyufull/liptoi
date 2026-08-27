@@ -1,6 +1,41 @@
 # Release log
 
-## [0.1.1] Latest
+## [0.1.2] Latest
+
+Fixed
+
+- Made the WebGL canvas fill one CSS-owned responsive rectangle with a matching high-resolution
+  backing buffer in desktop, phone portrait, and phone landscape layouts.
+- Detect mouse, touch, and pen pointers separately so laptops no longer advertise touch controls.
+- Request phone orientation permission only from an explicit gesture, wait for the first valid sensor
+  sample before starting, and fall back cleanly when permission or data is unavailable.
+- Keep tilt, pointer, and keyboard inputs available with visible last-input auto-switching.
+- Shortened narrow terminal prompts so mobile instructions remain inside the viewport.
+
+Changed
+
+- Trylle is now the primary forge and GitHub is the exact mirror used for free Pages hosting.
+- Added `trylle.md` to track feature experiments, platform experience, and reproducible Trylle bugs.
+- Expanded the Firefox browser pass to assert canvas geometry, backing resolution, overflow, device
+  labels, gyro calibration, first-sample start behavior, control switching, and both phone rotations.
+
+Notes
+
+- SemVer: this patch corrects browser input and responsive presentation without changing saved data.
+
+Contributors
+
+- @Mjoyufull
+- Co-authored-by: Codex
+
+Compatibility
+
+- Motion remains optional; desktop mouse/keyboard and phone touch/keyboard work without sensor access.
+- Existing browser-local best scores remain compatible.
+
+---
+
+## [0.1.1]
 
 Fixed
 
